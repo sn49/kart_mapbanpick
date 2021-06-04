@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from discord.utils import get
 import random
+import asyncio
 
 bot=commands.Bot(command_prefix="맵")
 
@@ -19,6 +20,7 @@ picklist=[]
 banlist=[]
 turn=0
 order=1
+isban=False
 
 #밴픽 참가
 @bot.command()
@@ -66,12 +68,13 @@ async def 픽(ctx,mapname=None):
     global maplist
     global order
     global turn
+    global isban
 
     if ctx.author.display_name!=part[turn]:
         await ctx.send("상대의 차례입니다.")
         return
 
-    if order==2 or order==4:
+    if isban:
         await ctx.send("밴을 할 차례입니다.")
         return
 
@@ -91,26 +94,43 @@ async def 픽(ctx,mapname=None):
     await SendMaplist(ctx)
 
     if order==9:
-        await ctx.send(picklist)
+        sendtext="```"
+        index=1
+        for track in picklist:
+            sendtext+=f"track{index} : {track}\n"
+            index+=1
+        sendtext+="```"
+        await ctx.send(sendtext)
         EndBanPick()
     else:
         order+=1
+
+        if order==2 or order==4:
+            isban=True
+        else:
+            isban=False
 
     if turn==0:
         turn=1
     else:
         turn=0
 
+    await NoticeTurn(ctx,turn,isban)
+
 def EndBanPick():
     global part
     global picklist
     global maplist
     global banlist
+    global turn
+    global order
 
-    part.clear()
-    picklist.clear()
-    maplist.clear()
-    banlist.clear()
+    part=[]
+    maplist=[]
+    picklist=[]
+    banlist=[]
+    turn=0
+    order=1
     
 
 @bot.command()
@@ -125,12 +145,13 @@ async def 밴(ctx,mapname=None):
     global banlist
     global order
     global turn
+    global isban
 
     if ctx.author.display_name!=part[turn]:
         await ctx.send("상대의 차례입니다.")
         return
 
-    if order==2 or order==4:
+    if isban:
         result=CheckMap(mapname)
 
         if result==-1:
@@ -143,10 +164,18 @@ async def 밴(ctx,mapname=None):
         await SendMaplist(ctx)
         order+=1
 
+        isban=False
+
+        
+
+
+
     if turn==0:
         turn=1
     else:
         turn=0
+
+    await NoticeTurn(ctx,turn,isban)
     
 
 def CheckMap(mapname):
@@ -160,7 +189,19 @@ def CheckMap(mapname):
 async def SendMaplist(ctx):
     global maplist
 
-    await ctx.send(maplist)
+    sendtext="```"
 
+    for track in maplist:
+        sendtext+=f"{track}\n"
+    
+    sendtext+="```"
+
+    await ctx.send(sendtext)
+
+async def NoticeTurn(ctx,turn,isban):
+    if isban:
+        await ctx.send(f"{part[turn]}의 밴을 할 차례")
+    else:
+        await ctx.send(f"{part[turn]}의 픽을 할 차례")
 
 bot.run(token)
