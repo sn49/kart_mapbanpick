@@ -91,13 +91,14 @@ async def 시작(ctx,mapfilename=None):
         datalist = os.listdir("maplist")
         senddata = ""
         for data in datalist:
-            senddata += f"{data.replace('.txt','')}\n"
+            if ".maptxt" in data:
+                senddata += f"{data.replace('.maptxt','')}\n"
         await ctx.send(senddata)
         return
 
 
     # 맵추첨
-    mapfile=open(f"maplist/{mapfilename}.txt","r",encoding="UTF-8")
+    mapfile=open(f"maplist/{mapfilename}.maptxt","r",encoding="UTF-8")
     maplist=mapfile.readlines()
     random.shuffle(maplist)
 
@@ -250,4 +251,21 @@ async def NoticeTurn(ctx,turn,isban):
     else:
         await ctx.send(f"{part[turn]}의 픽을 할 차례")
 
+
+@bot.command()
+async def 리스트(ctx,mapfilename=None):
+    if mapfilename==None:
+        datalist = os.listdir("maplist")
+        senddata = ""
+        for data in datalist:
+            if data.endswith(".maptxt"):
+                senddata += f"{data.replace('.maptxt','')}\n"
+        await ctx.send(senddata)
+        return
+
+
+    # 맵추첨
+    mapfile=open(f"maplist/{mapfilename}.maptxt","r",encoding="UTF-8")
+    maplist=mapfile.read()
+    await ctx.send("```"+maplist+"```")
 bot.run(token)
