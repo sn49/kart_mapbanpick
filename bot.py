@@ -131,10 +131,9 @@ async def 신청(ctx,mapfilename=None):
 
         if len(part)==0:
             part.append(ctx.author.display_name)
-            msg=await ctx.send(f"{ctx.author.display_name}의 {mapfilename} 밴픽에 참가할려면 🖐️이모지를 눌러주세요.")
-            await msg.add_reaction("🖐️")
+            gomsg=await ctx.send(f"{ctx.author.display_name}의 {mapfilename} 밴픽에 참가할려면 🖐️이모지를 눌러주세요.")
+            await gomsg.add_reaction("🖐️")
             signch=ctx.channel
-            gomsg=msg
         else:
             await ctx.send("이미 신청이 있습니다.")
 
@@ -277,8 +276,10 @@ async def EndBanPick():
     turn=0
     order=1
 
+    await gomsg.delete()
     await newch.delete()
     await banpickRole.delete()
+    
     
     
     
