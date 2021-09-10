@@ -115,3 +115,5 @@ dmypy.json
 
 token.txt
 *.txt
+mysql.json
+spreadjson2.json
