@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands, tasks
+from discord.ext.commands.core import check
 from discord.utils import get
 import random
 import asyncio
@@ -50,26 +51,26 @@ async def timer(ctx):
         repeat_Time=5
 
 
-    cturn=copy.deepcopy(turn)
+    corder=copy.deepcopy(turn)
 
     timemsg=await ctx.send(f"{second}초 남음")
 
+    
+
     for i in range(second//repeat_Time-1):
+        if bporder[order][0]=="r":
+            break
+
         await timemsg.edit(content=f"{second}초 남음")
         await asyncio.sleep(repeat_Time)
         second-=repeat_Time
         
-        if cturn!=turn:
+        if corder!=order:
             return
 
-    mapname=random.choice(maplist)
+    
 
-    if isban:
-        banlist.append(mapname)
-        maplist.remove(mapname)
-    else:
-        picklist.append(mapname)
-        maplist.remove(mapname)
+    randombp()
 
     await SendMaplist(ctx)
 
@@ -77,7 +78,7 @@ async def timer(ctx):
     
 gomsg=None
 ordermsg=None
-
+userindex=None
 
 @bot.event
 async def on_reaction_add(reaction,user):
@@ -87,6 +88,7 @@ async def on_reaction_add(reaction,user):
     global ordermsg
     global turn
     global startIndex
+    global userindex
 
     if reaction.message == gomsg:
         if not user.bot:
@@ -126,17 +128,21 @@ async def on_reaction_add(reaction,user):
                 for i in range(len(maplist)):
                     maplist[i]=maplist[i].replace("\n","")
                     startIndex=copy.deepcopy(turn)
+                userindex={}
+                userindex["a"]=part[turn]
+
+                if turn==0:
+                    turn=1
+                else:
+                    turn=0
+
+                userindex["b"]=part[turn]
+                userindex["r"]="random"
 
                 await SendMaplist(newch)
-                await newch.send(f"{part[turn]}의 픽부터 시작")
+                await newch.send(f"{userindex[bporder[order][0]]}의 {bporder[order][1]}부터 시작")
                 await timer(newch)
                 
-
-
-
-
-
-    
     
 
 part=[]
@@ -144,22 +150,62 @@ maplist=[]
 picklist=[]
 banlist=[]
 turn=0
-order=1
-isban=False
+order=0
 signch=None
+bporder=None
+
+def randombp():
+    global maplist
+    global banlist
+    global picklist
+
+    mapname=random.choice(maplist)
+
+    if bporder[order][1]=="ban":
+        banlist.append(mapname)
+        maplist.remove(mapname)
+    else:
+        picklist.append([mapname,"random"])
+        maplist.remove(mapname)
 
 
+def checkbpofile(filename):
+    try:
+        tempbpo=[]
+        bpofile=open(f"{filename}.bpo","r",encoding="utf-8")
+        tempo=bpofile.readlines()
 
+        count={}
+
+        for o in tempo:
+            info=o.split(',')
+            if info[0]=='a' or info[0]=='b' or info[0]=='r':
+                if info[1]=='pick' or info[1]=='ban':
+                    if info[1] in count.keys():
+                        count[info[1]]+=1
+                    else:
+                        count[info[1]]=1
+                    tempbpo.append([info[0],info[1]])
+                else:
+                    return False
+            else:
+                return False
+
+        return tempbpo
+    except:
+        return False
+
+    
 
 #밴픽 참가
 @bot.command()
-async def 신청(ctx,mapfilename=None):
+async def 신청(ctx,mapfilename=None,bpofilename=None):
     global part
     global maplist
     global gomsg
     global banpickRole
     global signch
-
+    global bporder
 
     if mapfilename==None:
         datalist = os.listdir("maplist")
@@ -179,12 +225,20 @@ async def 신청(ctx,mapfilename=None):
             mapfile=open(f"maplist/{mapfilename}.maptxt","r",encoding="UTF-8")
             maplist=mapfile.readlines()
 
+
+        bporder=checkbpofile(bpofilename)
+
+        if bporder==False:
+            await ctx.send("올바른 밴픽 순서 파일이 아님")
+            return
+
+
         banpickRole=await ctx.guild.create_role(name='밴픽',permissions=discord.Permissions(0))
         await ctx.author.add_roles(banpickRole)
 
         if len(part)==0:
             part.append(ctx.author.display_name)
-            gomsg=await ctx.send(f"{ctx.author.display_name}의 {mapfilename} 밴픽에 참가할려면 🖐️이모지를 눌러주세요.")
+            gomsg=await ctx.send(f"{ctx.author.display_name}의 {mapfilename} 밴픽에 참가할려면 🖐️이모지를 눌러주세요.(순서 : {bpofilename})")
             await gomsg.add_reaction("🖐️")
             signch=ctx.channel
         else:
@@ -193,6 +247,8 @@ async def 신청(ctx,mapfilename=None):
 banpickRole=None
 newch=None
 startIndex=None
+sendmsg=None
+
 
 async def banpickStart(ctx):
     global maplist
@@ -202,6 +258,7 @@ async def banpickStart(ctx):
     global newch
     global startIndex
     global ordermsg
+    
 
     newch=await ctx.guild.create_text_channel('밴픽')
     await newch.edit(category=gomsg.channel.category)
@@ -379,67 +436,29 @@ async def 랜덤맵(ctx):
 async def ChangeTurn(ctx):
     global order
     global turn
-    global isban
     global signch
     global startIndex
 
-    if order==9:
+    global bporder
+
+    order+=1
+
+    if order==len(bporder):
         sendtext=""
         index=1
         for track in picklist:
-            sendtext+=f"track{index} : {track}\n"
+            sendtext+=f"track{index} : {track[0]} - {track[1]}\n"
             index+=1
         await signch.send(f"```{part}\n{part[startIndex]}의 픽부터 시작(track1,2,3,5,7)\n{sendtext}\n밴 리스트 : {banlist}```")
         await EndBanPick()
-    else:
-        order+=1
+        return
 
-        if order==2 or order==4:
-            isban=True
-        else:
-            isban=False
-
-    if turn==0:
-        turn=1
-    else:
-        turn=0
-
-    await NoticeTurn(ctx,turn,isban)
+    await NoticeTurn(ctx)
 
     await timer(ctx)
     
 
 
-#맵 픽
-@bot.command()
-async def 픽(ctx,index=None):
-    global picklist
-    global maplist
-    global order
-    global turn
-    global isban
-
-    if ctx.author.display_name!=part[turn]: 
-        await ctx.send("상대의 차례입니다.")
-        return
-
-    if isban:
-        await ctx.send("밴을 할 차례입니다.")
-        return
-    else:
-
-        if index==None:
-            await ctx.send("맵 번호를 입력해주세요.")
-            return
-
-        mapname=maplist[int(index)-1]
-        
-        maplist.remove(mapname)
-        picklist.append(mapname)
-
-        await SendMaplist(ctx)
-
-        await ChangeTurn(ctx)
 
     
 async def EndBanPick():
@@ -453,13 +472,16 @@ async def EndBanPick():
     global newch
     global gomsg
     
+    global bporder
+    global sendmsg
 
     part=[]
     maplist=[]
     picklist=[]
     banlist=[]
     turn=0
-    order=1
+    order=0
+    sendmsg=None
 
     await gomsg.delete()
     await newch.delete()
@@ -476,40 +498,46 @@ async def 취소(ctx):
 
 #맵 밴
 @bot.command()
-async def 밴(ctx,index=None):
+async def 밴픽(ctx,index=None):
     global maplist
     global banlist
     global order
     global turn
-    global isban
+    global picklist
+    global userindex
 
-    if ctx.author.display_name!=part[turn]:
+    if ctx.author.display_name!=userindex[bporder[order][0]]: 
         await ctx.send("상대의 차례입니다.")
         return
 
-    if isban:
-        if index==None:
-            await ctx.send("맵 번호를 입력해주세요.")
-            return
-        mapname=maplist[int(index)-1]
-        
-        maplist.remove(mapname)
+    if index==None:
+        await ctx.send("맵 번호를 입력해주세요.")
+        return
+
+    mapname=maplist[int(index)-1]
+    maplist.remove(mapname)
+
+    if bporder[order][1]=="ban":
         banlist.append(mapname)
-
-        await SendMaplist(ctx)
-
-        isban=False
-
-        
-        await ChangeTurn(ctx)
-
-        await NoticeTurn(ctx,turn,isban)
     else:
-        await ctx.send("밴을 할 차례입니다.")
+        picklist.append([mapname,userindex[bporder[order][0]]])
+
+    await SendMaplist(ctx)
+
+    await ChangeTurn(ctx)
+
+    await NoticeTurn(ctx)
+
+    await ctx.delete()
 
 
 async def SendMaplist(ctx):
     global maplist
+    global bporder
+    global order
+    global picklist
+    global banlist
+    global sendmsg
 
     sendtext="```"
 
@@ -519,15 +547,17 @@ async def SendMaplist(ctx):
         sendtext+=f"{index}  {track}\n"
         index+=1
     
+    sendtext+=f"밴 : {banlist}\n"
+    sendtext+=f"픽 : {picklist}"
     sendtext+="```"
 
-    await ctx.send(sendtext)
-
-async def NoticeTurn(ctx,turn,isban):
-    if isban:
-        await ctx.send(f"{part[turn]}의 밴을 할 차례")
+    if sendmsg==None:
+        sendmsg=await ctx.send(sendtext)
     else:
-        await ctx.send(f"{part[turn]}의 픽을 할 차례")
+        await sendmsg.edit(content=sendtext)
+
+async def NoticeTurn(ctx):
+    await ctx.send(f"{userindex[bporder[order][0]]}의 {bporder[order][1]}을 할 차례")
 
 
 def GetAllTrack():
