@@ -34,34 +34,43 @@ token = tokenfile.readlines()
 async def on_ready():
     print("ready")
 
+timemsg=None
+
 async def timer(ctx):
     global maplist
     global turn
     global maplist
     global banlist
     global picklist
+    global timemsg
+    global order
 
-
+    repeat_Time=5
+    second=0
 
     if testmode:
         second=35
-        repeat_Time=5
-    else:
+    else:   
         second=40
-        repeat_Time=5
-
-
-    corder=copy.deepcopy(turn)
-
-    timemsg=await ctx.send(f"{second}초 남음")
 
     
 
-    for i in range(second//repeat_Time-1):
+
+    corder=copy.deepcopy(order)
+
+    
+
+    
+
+    while second>0:
         if bporder[order][0]=="r":
             break
 
-        await timemsg.edit(content=f"{second}초 남음")
+        if timemsg==None:
+            timemsg=await ctx.send(f"{second}초 남음")
+        else:
+            print("tetssetttt")
+            await timemsg.edit(content=f"{second}초 남음")
         await asyncio.sleep(repeat_Time)
         second-=repeat_Time
         
@@ -123,11 +132,10 @@ async def on_reaction_add(reaction,user):
                 if emojiIndex==0 or emojiIndex==1:
                     turn=emojiIndex
                 else:
-                    random.randrange(0,2)
+                    turn=random.randrange(0,2)
                 await ordermsg.delete()
                 for i in range(len(maplist)):
                     maplist[i]=maplist[i].replace("\n","")
-                    startIndex=copy.deepcopy(turn)
                 userindex={}
                 userindex["a"]=part[turn]
 
@@ -162,7 +170,7 @@ def randombp():
     mapname=random.choice(maplist)
 
     if bporder[order][1]=="ban":
-        banlist.append(mapname)
+        banlist.append([mapname,"random"])
         maplist.remove(mapname)
     else:
         picklist.append([mapname,"random"])
@@ -449,7 +457,10 @@ async def ChangeTurn(ctx):
         for track in picklist:
             sendtext+=f"track{index} : {track[0]} - {track[1]}\n"
             index+=1
-        await signch.send(f"```{part}\n{part[startIndex]}의 픽부터 시작(track1,2,3,5,7)\n{sendtext}\n밴 리스트 : {banlist}```")
+        sendtext+="\n\n밴 리스트\n"
+        for ban in banlist:
+            sendtext+=f"{ban[0]} - {ban[1]}\n"
+        await signch.send(f"```{sendtext}```")
         await EndBanPick()
         return
 
@@ -474,6 +485,7 @@ async def EndBanPick():
     
     global bporder
     global sendmsg
+    global timemsg
 
     part=[]
     maplist=[]
@@ -482,6 +494,7 @@ async def EndBanPick():
     turn=0
     order=0
     sendmsg=None
+    timemsg=None
 
     await gomsg.delete()
     await newch.delete()
@@ -518,7 +531,7 @@ async def 밴픽(ctx,index=None):
     maplist.remove(mapname)
 
     if bporder[order][1]=="ban":
-        banlist.append(mapname)
+        banlist.append([mapname,userindex[bporder[order][0]]])
     else:
         picklist.append([mapname,userindex[bporder[order][0]]])
 
@@ -528,8 +541,9 @@ async def 밴픽(ctx,index=None):
 
     await NoticeTurn(ctx)
 
-    await ctx.delete()
+    await ctx.message.delete()
 
+turnmsg=None
 
 async def SendMaplist(ctx):
     global maplist
@@ -546,9 +560,17 @@ async def SendMaplist(ctx):
     for track in maplist:
         sendtext+=f"{index}  {track}\n"
         index+=1
-    
-    sendtext+=f"밴 : {banlist}\n"
-    sendtext+=f"픽 : {picklist}"
+
+    sendtext+=f"\n밴 리스트\n"
+
+
+    for ban in banlist:
+        sendtext+=f"{ban[0]}\n"
+
+    sendtext+=f"\n픽 리스트\n"
+
+    for pick in picklist:
+        sendtext+=f"{pick[0]}\n"
     sendtext+="```"
 
     if sendmsg==None:
@@ -556,8 +578,15 @@ async def SendMaplist(ctx):
     else:
         await sendmsg.edit(content=sendtext)
 
+
+
 async def NoticeTurn(ctx):
-    await ctx.send(f"{userindex[bporder[order][0]]}의 {bporder[order][1]}을 할 차례")
+    global turnmsg
+
+    if turnmsg==None:
+        turnmsg=await ctx.send(f"{userindex[bporder[order][0]]}의 {bporder[order][1]}을 할 차례")
+    else:
+        await turnmsg.edit(content=f"{userindex[bporder[order][0]]}의 {bporder[order][1]}을 할 차례")
 
 
 def GetAllTrack():
