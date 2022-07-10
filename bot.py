@@ -1,7 +1,7 @@
-import discord
-from discord.ext import commands, tasks
-from discord.ext.commands.core import check
-from discord.utils import get
+import nextcord
+from nextcord.ext import commands, tasks
+from nextcord.ext.commands.core import check
+from nextcord.utils import get
 import random
 import asyncio
 import os
@@ -227,7 +227,7 @@ async def 신청(ctx,mapfilename=None,bpofilename=None):
         
         if mapfilename=="all":
             maplist=GetAllTrack()
-            maplist=random.sample(maplist,12)
+            maplist=random.sample(maplist,14)
         else:
             # 맵추첨
             mapfile=open(f"maplist/{mapfilename}.maptxt","r",encoding="UTF-8")
@@ -241,7 +241,7 @@ async def 신청(ctx,mapfilename=None,bpofilename=None):
             return
 
 
-        banpickRole=await ctx.guild.create_role(name='밴픽',permissions=discord.Permissions(0))
+        banpickRole=await ctx.guild.create_role(name='밴픽',permissions=nextcord.Permissions(0))
         await ctx.author.add_roles(banpickRole)
 
         if len(part)==0:
@@ -270,11 +270,11 @@ async def banpickStart(ctx):
 
     newch=await ctx.guild.create_text_channel('밴픽')
     await newch.edit(category=gomsg.channel.category)
-    selfbot=discord.utils.get(ctx.guild.members,id=bot.user.id)
+    selfbot=nextcord.utils.get(ctx.guild.members,id=bot.user.id)
     await selfbot.add_roles(banpickRole)
     await newch.set_permissions(banpickRole,read_messages=True)
     await newch.set_permissions(ctx.guild.default_role,read_messages=False)
-    ordermsg=await newch.send(f"{part[0]}부터 시작 - 🇦,{part[1]}부터 시작 - 🇧,랜덤 시작 - 🇷")
+    ordermsg=await newch.send(f"{part[0]}부터 시작 - 🇦\n{part[1]}부터 시작 - 🇧\n랜덤 시작 - 🇷")
     await ordermsg.add_reaction("🇦")
     await ordermsg.add_reaction("🇧")
     await ordermsg.add_reaction("🇷")
@@ -594,7 +594,7 @@ def GetAllTrack():
     datalist = os.listdir("maplist")
     senddata = ""
     for data in datalist:
-        if data.endswith(".maptxt"):
+        if data.endswith(".maptxt") and not "item" in data:
             mapfile=open("maplist/"+data,"r",encoding="UTF-8")
             for track in mapfile.readlines():
                 temp=track.replace("\n","")
@@ -622,7 +622,7 @@ async def 리스트(ctx,mapfilename=None):
                 sendtext+="```"
                 await ctx.send(sendtext)
                 sendtext="```"
-        sendtext+="이중 12개 추첨\n```"
+        sendtext+="이중 14개 추첨\n```"
         await ctx.send(sendtext)
         return
 
@@ -632,18 +632,25 @@ async def 리스트(ctx,mapfilename=None):
     maplist=mapfile.read()
     await ctx.send("```"+maplist+"```")
 
+owner=json.load(open("owner.json","r"))
+
 @bot.command()
 async def 평가(ctx,mapfilename=None):
-    mapfile=open(f"votelist/{mapfilename}","r",encoding="UTF-8")
-    maplist=mapfile.readlines()
+    if owner["owner"]==ctx.author.id:   
+    
+        mapfile=open(f"votelist/{mapfilename}.maptxt","r",encoding="UTF-8")
+        maplist=mapfile.readlines()
 
-    sendtext="```"
+        result=random.sample(maplist,3)
 
-    for i in maplist:
-        sendtext+=f"{i}"
-    sendtext+="```\n추후 기능 추가 예정"
+        sendtext="```"
+        for i in result:
+            i=i.replace('\n','')
+            sendtext+=f"{i}\n"
 
-    await ctx.send(sendtext)
+        await ctx.send(f"{sendtext}```")
+    else:
+        await ctx.send("권한이 없습니다.")
 
 
 inputT=input("test or main : ")
