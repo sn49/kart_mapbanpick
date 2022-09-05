@@ -1,3 +1,8 @@
+from calendar import month
+import collections
+from datetime import datetime
+from typing import Iterable
+from xmlrpc.client import DateTime
 import nextcord
 from nextcord.ext import commands, tasks
 from nextcord.ext.commands.core import check
@@ -8,11 +13,26 @@ import os
 import copy
 import pymysql
 import json
+import csv
+
+inputT=input("test or main : ")
 
 sqlinfo = open("mysql.json", "r")
 sqlcon = json.load(sqlinfo)
 
-database = pymysql.connect(
+if inputT=="test":
+    testmode=True
+    database = pymysql.connect(
+    user=sqlcon["user"],
+    host=sqlcon["host"],
+    db=sqlcon["testdb"],
+    charset=sqlcon["charset"],
+    password=sqlcon["password"],
+    autocommit=True,
+)
+elif inputT=="main":
+    testmode=False
+    database = pymysql.connect(
     user=sqlcon["user"],
     host=sqlcon["host"],
     db=sqlcon["db"],
@@ -20,6 +40,10 @@ database = pymysql.connect(
     password=sqlcon["password"],
     autocommit=True,
 )
+
+
+
+
 cur = database.cursor()
 
 
@@ -30,7 +54,7 @@ testmode=False
 tokenfile=open("token.txt","r")
 token = tokenfile.readlines()
 
-@bot.event  
+@bot.event
 async def on_ready():
     print("ready")
 
@@ -45,11 +69,11 @@ async def timer(ctx):
     global timemsg
     global order
 
-    repeat_Time=5
+    repeat_Time=2
     second=0
 
     if testmode:
-        second=35
+        second=38
     else:   
         second=40
 
@@ -63,6 +87,9 @@ async def timer(ctx):
     
 
     while second>0:
+        if corder!=order:
+            return
+
         if bporder[order][0]=="r":
             break
 
@@ -74,12 +101,11 @@ async def timer(ctx):
         await asyncio.sleep(repeat_Time)
         second-=repeat_Time
         
-        if corder!=order:
-            return
+        
 
     
 
-    randombp()
+    bpmanage("random",bporder[order][1])
 
     await SendMaplist(ctx)
 
@@ -96,15 +122,34 @@ async def on_reaction_add(reaction,user):
     global banpickRole
     global ordermsg
     global turn
+    global turnmsg
     global startIndex
     global userindex
+    global isdbrecord
+    global partid
 
     if reaction.message == gomsg:
         if not user.bot:
-            if not user.display_name in part:
+            if not user.id in partid:
                 if reaction.emoji =="🖐️":
-                    if len(part)<2:
-                        part.append(user.display_name)
+                    if len(part)==1:
+
+                        if isdbrecord:
+                            sql=f"select nickname from user where discordid={user.id}"
+                            cur.execute(sql)
+                            res=cur.fetchone()
+
+                            if res==None:
+                                await reaction.message.channel.send("비회원입니다. true 미입력시 비회원으로 가능합니다.")
+                                return
+                            else:
+                                part.append(res[0])
+                                partid.append(user.id)
+                            
+                        else:
+                            part.append(user.display_name)
+                            partid.append(user.id)
+                    
                         await user.add_roles(banpickRole)
                         await reaction.message.edit(content=f"{part}의 밴픽을 보고싶다면 😀를 눌러주세요.")
                         await reaction.message.add_reaction("😀")
@@ -124,7 +169,7 @@ async def on_reaction_add(reaction,user):
     
     if reaction.message == ordermsg:
         if not user.bot:
-            if user.display_name in part:
+            if user.id in partid:
                 emojiList=["🇦","🇧","🇷"]
                 emojiIndex=emojiList.index(reaction.emoji)
                 print(emojiIndex)
@@ -137,50 +182,72 @@ async def on_reaction_add(reaction,user):
                 for i in range(len(maplist)):
                     maplist[i]=maplist[i].replace("\n","")
                 userindex={}
-                userindex["a"]=part[turn]
+                userindex["a"]=[part[turn],partid[turn]]
 
                 if turn==0:
                     turn=1
                 else:
                     turn=0
 
-                userindex["b"]=part[turn]
-                userindex["r"]="random"
+                userindex["b"]=[part[turn],partid[turn]]
+                userindex["r"]=["random"]
 
                 await SendMaplist(newch)
-                await newch.send(f"{userindex[bporder[order][0]]}의 {bporder[order][1]}부터 시작")
+                print(userindex)
+                turnmsg=await newch.send(f"{userindex[bporder[order][0]][0]}의 {bporder[order][1]}부터 시작")
                 await timer(newch)
+                
                 
     
 
 part=[]
+partid=[]
 maplist=[]
-picklist=[]
-banlist=[]
+banpicklist=[]
 turn=0
 order=0
 signch=None
 bporder=None
+isdbrecord=False
 
-def randombp():
+def bpmanage(username,mode,trackname=None):
     global maplist
-    global banlist
-    global picklist
+    global banpicklist
+    global isdbrecord
+    
+    mapname=trackname
 
-    mapname=random.choice(maplist)
+    trackno=0
+    if username=="random":
+        mapname=random.choice(maplist)
 
-    if bporder[order][1]=="ban":
-        banlist.append([mapname,"random"])
-        maplist.remove(mapname)
-    else:
-        picklist.append([mapname,"random"])
-        maplist.remove(mapname)
 
+
+    bancount=len([x for x in banpicklist if x[2]=="ban"])
+    print(bancount)
+
+    if mode=="pick":
+        trackno=len(banpicklist)-bancount+1
+
+
+    banpicklist.append([mapname,username,mode])
+    
+   
+
+    maplist.remove(mapname)
+
+        
+
+
+    if isdbrecord:
+        sql=f"insert into alltrackplaylist (year,month,player1,player2,trackno,trackname,picker) values ({int(str(datetime.now().year)[-2:])},{datetime.now().month},'{userindex['a'][0]}','{userindex['b'][0]}',{trackno},'{banpicklist[-1][0]}','{username}')"
+        print(sql)
+        cur.execute(sql)
 
 def checkbpofile(filename):
     try:
         tempbpo=[]
-        bpofile=open(f"{filename}.bpo","r",encoding="utf-8")
+        bpofile=open(f"bporder/{filename}.bpo","r",encoding="utf-8")
         tempo=bpofile.readlines()
 
         count={}
@@ -203,17 +270,66 @@ def checkbpofile(filename):
     except:
         return False
 
+
+
+@bot.command()
+async def 가입(ctx,nickname=None):
+    banword=open("secret/banword.txt","r",encoding="UTF-8").readlines()
+    for i in range(len(banword)):
+        banword[i]=banword[i].replace("\n","")
+
+        if banword[i] in nickname:
+            await ctx.send("사용할수 없는 닉네임")
+            return
+
+    if len(nickname)>15:
+        await ctx.send("닉네임 글자 수 15자 이하")
+        return
     
+    sql=f"insert ignore into user (discordid,nickname) values ({ctx.author.id},'{nickname}')"
+    print(sql)
+    result=cur.execute(sql)
+    print(result)
+
+    if result>0: 
+        await ctx.send("가입 완료")
+    else:
+        await ctx.send("이미 가입했거나 중복된 닉네임입니다.")
+
+    
+
 
 #밴픽 참가
 @bot.command()
-async def 신청(ctx,mapfilename=None,bpofilename=None):
+async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None):
     global part
     global maplist
     global gomsg
     global banpickRole
     global signch
     global bporder
+    global isdbrecord
+    global partid
+
+
+
+    if str(dbrecord).lower()=="true":
+        
+
+        sql=f"select nickname from user where discordid={ctx.author.id}"
+        cur.execute(sql)
+        res=cur.fetchone()
+
+        if res==None:
+            await ctx.send("비회원입니다. true 미입력시 비회원으로 가능합니다.")
+            return
+
+        part.append(res[0])
+        partid.append(ctx.author.id)
+        isdbrecord=True
+        
+    else:
+        isdbrecord=False
 
     if mapfilename==None:
         datalist = os.listdir("maplist")
@@ -240,12 +356,19 @@ async def 신청(ctx,mapfilename=None,bpofilename=None):
             await ctx.send("올바른 밴픽 순서 파일이 아님")
             return
 
+        if len(bporder)+1>len(maplist):
+            await ctx.send(f"밴픽 {len(bporder)}개 가능, 하지만 맵리스트는 {len(maplist)}개(동일 개수일시, 마지막 맵은 자동선택과 다르지 않음)")
+            return
+
 
         banpickRole=await ctx.guild.create_role(name='밴픽',permissions=nextcord.Permissions(0))
         await ctx.author.add_roles(banpickRole)
 
-        if len(part)==0:
+        if not isdbrecord:
             part.append(ctx.author.display_name)
+            partid.append(ctx.author.id)
+
+        if len(part)==1:
             gomsg=await ctx.send(f"{ctx.author.display_name}의 {mapfilename} 밴픽에 참가할려면 🖐️이모지를 눌러주세요.(순서 : {bpofilename})")
             await gomsg.add_reaction("🖐️")
             signch=ctx.channel
@@ -257,10 +380,10 @@ newch=None
 startIndex=None
 sendmsg=None
 
-
 async def banpickStart(ctx):
     global maplist
     global part
+    global partid
     global turn
     global banpickRole
     global newch
@@ -286,7 +409,9 @@ async def banpickStart(ctx):
 @bot.command()
 async def test(ctx):
     await ctx.send(ctx.author.mention)
-    
+
+
+
 @bot.command()
 async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
     try:
@@ -308,10 +433,84 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
 
 
         if nickname==None:
-            sql=f"SELECT SUM(pick),SUM(ban),MIN(bestrecord) FROM track_{mapname}"
+            #카운트 해야할것 : 픽 횟수, 밴 횟수, 랜덤 픽 횟수, 랜덤 밴 횟수
+            #찾아야 할것 : 최고기록
+
+            sql=f'''SELECT * FROM alltrackplaylist WHERE trackname="{mapname}"'''
+
             cur.execute(sql)
-            i=cur.fetchone()
-            sendtext=f"{mapname.replace('_',' ')}\n픽 {i[0]}회\n밴 {i[1]}회\n최고 기록 {i[2]}"
+
+            result=cur.fetchall()
+
+            
+            bestrecord={
+                "year":0,
+                "month":0,
+                "round":0,
+                "setno":0,
+                "trackno":0,
+                "player":"",
+                "opponent":"",
+                "record":"9'59'999"
+            }
+
+            randomban=0
+            ban=0
+            randompick=0
+            pick=0
+
+            cant=0
+            random_cant=0
+
+
+            for i in result:
+                year=i[1]
+                month=i[2]
+                round=i[3]
+                player=(i[4],i[5])
+                setno=i[6]
+                trackno=i[7]
+                picker=i[9]
+                winner=i[10]
+                winrecord=i[11]
+
+                if trackno==0:
+                    if picker=="random":
+                        randomban+=1
+                    else:
+                        ban+=1
+                else:
+                    if picker=="random":
+                        randompick+=1
+                    else:
+                        pick+=1
+
+                    if winner!="X":
+                        if bestrecord["record"]>winrecord:
+                            bestrecord["year"]=year
+                            bestrecord["month"]=month
+                            bestrecord["round"]=round
+                            bestrecord["setno"]=setno
+                            bestrecord["trackno"]=trackno
+                            bestrecord["player"]=winner
+
+                            if winner==player[0]:
+                                bestrecord["opponent"]=player[1]
+                            else:
+                                bestrecord["opponent"]=player[0]
+
+                            bestrecord["record"]=winrecord
+                    else:
+                        if picker=="random":
+                            random_cant+=1
+                        else:
+                            cant+=1
+
+            
+            sendtext=f"{mapname.replace('_',' ')}\n픽 {pick}회({cant}회 못함)\n밴 {ban}회\n랜덤밴 {randomban}회\n랜덤픽 {randompick}회({random_cant}회 못함)"
+
+            if bestrecord['record']!="9'59'999":
+                sendtext+=f"\n최고 기록 {bestrecord['record']} by {bestrecord['player']}\n{bestrecord['year']}년 {bestrecord['month']}월 {bestrecord['round']}라운드 vs {bestrecord['opponent']} {bestrecord['setno']}세트 {bestrecord['trackno']}트랙"
         else:
             
 
@@ -330,7 +529,7 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
                     sql=f"SELECT * FROM track_{mapname} WHERE nickname='{nickname}'"
                     cur.execute(sql)
                     i=cur.fetchone()
-                    sendtext=f"{i[0]}\n픽 {i[1]}회\n - 승리 {i[2]}회\n - 패배 {i[3]}회\n - 못함 {i[1]-i[2]-i[3]}회\n밴 {i[4]}회\n{i[5]}승 {i[6]}패\n최고 기록 : {i[7]}\n{i[8]}년 {i[9]}월 시즌{i[10]} {i[11]}라운드 vs {i[14]} {i[12]}세트 {i[13]}트랙"
+                    sendtext=f"{i[0]}\n픽 {i[1]}회\n - 승리 {i[2]}회\n - 패배 {i[3]}회\n - 못함 {i[1]-i[2]-i[3]}회\n밴{i[4]}회\n랜덤밴 {i[5]}회\n랜덤픽{i[6]}회\n{i[7]}승 {i[8]}패\n최고 기록 : {i[9]}\n{i[10]}년 {11}월 {i[12]}라운드 vs {i[15]} {i[13]}세트 {i[14]}트랙"
             else:
                 sendtext="```"
                 sql=f"SELECT trackno,picker,winner FROM alltrackplaylist WHERE ((player1='{nickname}' AND player2='{nickname2}') OR (player1='{nickname2}' AND player2='{nickname}')) AND trackname='{mapname}'"
@@ -346,19 +545,25 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
                 ban=[0,0]
                 win=[0,0]
                 cant=[0,0]
+                r_pick=0
+                r_ban=0
 
                 
                 for info in i:
-                    if info[0]==0:
-                        if nickname==info[1]:
+                    if info[0]==0:#밴한 트랙
+                        if "random"==info[1]:
+                            r_ban+=1
+                        elif nickname==info[1]:
                             ban[0]+=1
                         else:
                             ban[1]+=1
-                    else:
+                    else:#픽한 트랙
                         iscant=False
-                        if info[2]=="X" or info[2]=="x" :
+                        if info[2]=="X" or info[2]=="x" :#세트가 끝나 못한 트랙
                             iscant=True
-                        if nickname==info[1]:
+                        if "random"==info[1]:#랜덤픽
+                            r_pick+=1
+                        elif nickname==info[1]:#랜덤픽 아닌경우
                             pick[0]+=1
                             if iscant:
                                 cant[0]+=1
@@ -378,6 +583,8 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
                 sendtext=f"```{mapname}\n{nickname} vs {nickname2}\n"
                 sendtext+=f"픽 {pick[0]}({cant[0]}회 못함) : {pick[1]}({cant[1]}회 못함)\n"
                 sendtext+=f"밴 {ban[0]} : {ban[1]}\n"
+                sendtext+=f"랜덤밴 {ban[0]}\n"
+                sendtext+=f"랜덤픽 {ban[0]}\n"
                 sendtext+=f"승리 {win[0]} : {win[1]}```"
 
                 await ctx.send(sendtext)
@@ -450,17 +657,40 @@ async def ChangeTurn(ctx):
     global bporder
 
     order+=1
+    sendlist=["change"]
+
 
     if order==len(bporder):
-        sendtext=""
-        index=1
-        for track in picklist:
-            sendtext+=f"track{index} : {track[0]} - {track[1]}\n"
-            index+=1
-        sendtext+="\n\n밴 리스트\n"
-        for ban in banlist:
-            sendtext+=f"{ban[0]} - {ban[1]}\n"
-        await signch.send(f"```{sendtext}```")
+        for bp in banpicklist:
+            if bp[2]=="pick":
+                sendlist.insert(sendlist.index("change"),bp)
+            else:
+                sendlist.append(bp)
+                
+
+        print(f"sendlist : {sendlist}")
+
+
+
+
+        sendtext=f"```픽 리스트\n"
+    
+        trackno=0
+
+        for bp in sendlist:
+            if bp=="change":
+                sendtext+=f"\n밴 리스트\n"
+            else:
+                
+                if bp[2]=="pick":
+                    trackno+=1
+                    sendtext+=f"track{trackno} - "
+                
+
+                sendtext+=f"{bp[0]} - {bp[1]}\n"
+
+        sendtext+="```"
+        await signch.send(f"{sendtext}")
         await EndBanPick()
         return
 
@@ -474,9 +704,9 @@ async def ChangeTurn(ctx):
     
 async def EndBanPick():
     global part
-    global picklist
+    global partid
+    global banpicklist
     global maplist
-    global banlist
     global turn
     global order
     global banpickRole
@@ -487,10 +717,10 @@ async def EndBanPick():
     global sendmsg
     global timemsg
 
-    part=[]
-    maplist=[]
-    picklist=[]
-    banlist=[]
+    part.clear()
+    partid.clear()
+    maplist.clear()
+    banpicklist.clear()
     turn=0
     order=0
     sendmsg=None
@@ -513,13 +743,15 @@ async def 취소(ctx):
 @bot.command()
 async def 밴픽(ctx,index=None):
     global maplist
-    global banlist
+    global banpicklist
     global order
     global turn
-    global picklist
     global userindex
+    global isdbrecord
 
-    if ctx.author.display_name!=userindex[bporder[order][0]]: 
+    await ctx.message.delete()
+
+    if ctx.author.id!=userindex[bporder[order][0]][1]: 
         await ctx.send("상대의 차례입니다.")
         return
 
@@ -528,12 +760,12 @@ async def 밴픽(ctx,index=None):
         return
 
     mapname=maplist[int(index)-1]
-    maplist.remove(mapname)
 
-    if bporder[order][1]=="ban":
-        banlist.append([mapname,userindex[bporder[order][0]]])
-    else:
-        picklist.append([mapname,userindex[bporder[order][0]]])
+    print(userindex)
+    print(bporder)
+    print(order)
+
+    bpmanage(userindex[bporder[order][0]][0],bporder[order][1],mapname)
 
     await SendMaplist(ctx)
 
@@ -541,7 +773,7 @@ async def 밴픽(ctx,index=None):
 
     await NoticeTurn(ctx)
 
-    await ctx.message.delete()
+    
 
 turnmsg=None
 
@@ -549,28 +781,44 @@ async def SendMaplist(ctx):
     global maplist
     global bporder
     global order
-    global picklist
-    global banlist
+    global banpicklist
     global sendmsg
 
-    sendtext="```"
+
+    sendlist=["change"]
 
     index=1
+    sendtext=f"```"
 
     for track in maplist:
         sendtext+=f"{index}  {track}\n"
         index+=1
 
-    sendtext+=f"\n밴 리스트\n"
+    
 
 
-    for ban in banlist:
-        sendtext+=f"{ban[0]}\n"
+    for bp in banpicklist:
+        if bp[2]=="pick":
+            sendlist.insert(sendlist.index("change"),bp)
+        else:
+            sendlist.append(bp)
+            
+
+    print(f"sendlist : {sendlist}") 
+
+
+
 
     sendtext+=f"\n픽 리스트\n"
+    
 
-    for pick in picklist:
-        sendtext+=f"{pick[0]}\n"
+
+    for bp in sendlist:
+        if bp=="change":
+            sendtext+=f"\n밴 리스트\n"
+        else:
+            sendtext+=f"{bp[0]} - {bp[1]}\n"
+
     sendtext+="```"
 
     if sendmsg==None:
@@ -584,9 +832,9 @@ async def NoticeTurn(ctx):
     global turnmsg
 
     if turnmsg==None:
-        turnmsg=await ctx.send(f"{userindex[bporder[order][0]]}의 {bporder[order][1]}을 할 차례")
+        await turnmsg.edit(f"{userindex[bporder[order][0]][0]}의 {bporder[order][1]}을 할 차례")
     else:
-        await turnmsg.edit(content=f"{userindex[bporder[order][0]]}의 {bporder[order][1]}을 할 차례")
+        await turnmsg.edit(content=f"{userindex[bporder[order][0]][0]}의 {bporder[order][1]}을 할 차례")
 
 
 def GetAllTrack():
@@ -652,12 +900,206 @@ async def 평가(ctx,mapfilename=None):
     else:
         await ctx.send("권한이 없습니다.")
 
+@bot.command()
+async def 랭킹(ctx,nickname=None):
+    ranklist = []
+    with open("카트 1대1 elo rating.json", "r", encoding="UTF-8") as f:
+        alldata = json.load(f)
+        
+    for user in alldata.keys():
 
-inputT=input("test or main : ")
-if inputT=="test":
-    testmode=True
+        rank = 0
+        for data in ranklist:
+            if data[1] > alldata[user]["score"]:
+                rank += 1
+
+        ranklist.insert(
+            rank,
+            [
+                user,
+                alldata[user]["score"],
+                alldata[user]["win"],
+                alldata[user]["lose"],
+                alldata[user]["winstrike"],
+                alldata[user]["maxwinstrike"],
+            ],
+        )
+    
+    sendtext="```"
+    index=1
+
+    for i in ranklist:
+        print(i)
+        sendtext+=f"{index} {i[0]} {i[1]} {i[2]}승 {i[3]}패 {i[4]}연승(최대 {i[5]}연승) 승률 : {i[2]/(i[2]+i[3])*100}%\n"
+        index+=1
+
+    sendtext+="```"
+    await ctx.send(sendtext)
+    
+@bot.command()
+async def 선호도(ctx,nick=None):
+    checkno=1
+    sql='''SELECT trackname FROM speedtracklist GROUP BY trackname'''
+    cur.execute(sql)
+    res=cur.fetchall()
+
+    trackscore={}
+
+    for d in res : 
+        trackscore[d[0]]={"score":0,"pick":0,"ban":0}
+
+    if nick==None:
+        sql='''SELECT id,setno,trackno,trackname,picker FROM alltrackplaylist'''
+    else:
+        sql=f'''SELECT setno,trackno,trackname FROM alltrackplaylist where picker="{nick}"'''
+
+
+    col=cur.execute(sql)
+    res=cur.fetchall()
+
+    if col==0:
+        await ctx.send("존재하지 않는 유저 닉네임")
+        return
+
+    
+
+    setno=0
+
+    pickbancount={}
+
+    for d in res : 
+        if checkno==1:
+            setno=1
+        else:
+            pass
+
+
+        
+        if nick==None:
+            if d[1]!=setno:
+                pickbancount.clear()
+                setno=d[1]
+        else:
+            print(d[0],setno)
+
+            if d[0]!=setno:
+                print(pickbancount)
+                pickbancount.clear()
+                setno=d[0]
+        
+        trackname=""
+        trackno=-1
+        nickname=""
+        
+
+        if nick==None:
+            trackname=d[3]
+            trackno=d[2]
+            nickname=d[4]
+        else:
+            trackname=d[2]
+            trackno=d[1]
+            nickname=nick
+
+        
+        
+
+        if nickname==None:
+            if d[4]=="random":
+                continue
+        
+
+        if not nickname in pickbancount:
+            pickbancount[nickname]={"pick":0,"ban":0}
+
+        
+
+        if trackno==0:
+            trackscore[trackname]["score"]+=-5+pickbancount[nickname]["ban"]
+            trackscore[trackname]["ban"]+=1
+            pickbancount[nickname]["ban"]+=1
+        else:
+            trackscore[trackname]["score"]+=5-pickbancount[nickname]["pick"]
+            trackscore[trackname]["pick"]+=1
+            pickbancount[nickname]["pick"]+=1
+
+        checkno+=1
+
+
+
+    
+
+    
+
+    sendlist=[]
+
+    for name in trackscore.keys():
+        
+        rank = 0
+        for data in sendlist:
+            if data[1] > trackscore[name]["score"]:
+                rank += 1
+            elif data[1] == trackscore[name]["score"]:
+                if data[2] > trackscore[name]["pick"]:
+                    rank+=1
+
+        sendlist.insert(
+            rank,
+            [
+                name,
+                trackscore[name]["score"],
+                trackscore[name]["pick"],
+                trackscore[name]["ban"],
+            ],
+        )
+
+    
+    sendtext="```"
+
+
+    indexno=0
+
+    for data in sendlist:
+        indexno+=1
+
+        sendtext+=f"{'%-2s'%indexno} {data[0]} : {data[1]}점 픽 {data[2]}회 밴 {data[3]}회(밴픽 {data[2]+data[3]}회)\n"
+        
+
+        if indexno % 20 == 0:
+            sendtext += "```"
+            # await ctx.send(sendtext)
+            sendtext = "```"
+
+    sendtext+="```"
+
+    # await ctx.send(sendtext)
+
+    csvname=""
+
+    if nick==None:
+        csvname="../everyone_trackscore.csv"
+    else:
+        csvname=f"../{nickname}_trackscore.csv"
+
+    with open(csvname,'w',newline='') as csvfile:
+        cw=csv.writer(csvfile)
+        cw.writerow(["트랙 이름","점수","픽","밴","픽+밴"])
+
+        for data in sendlist:
+            data.append(data[2]+data[3])
+            cw.writerow(data)
+
+    await ctx.send(files=[nextcord.File(csvname)])
+
+
+    
+
+
+
+
+
+if testmode:
     bot.command_prefix="map"
     bot.run(token[1])
-elif inputT=="main":
-    testmode=False
+else :
     bot.run(token[0])

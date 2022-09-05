@@ -119,3 +119,5 @@ mysql.json
 spreadjson2.json
 votelist/
 owner.json
+카트 1대1 elo rating.json
+test.py
