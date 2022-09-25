@@ -209,6 +209,8 @@ order=0
 signch=None
 bporder=None
 isdbrecord=False
+dbset=0
+dbround=0
 
 def bpmanage(username,mode,trackname=None):
     global maplist
@@ -240,7 +242,12 @@ def bpmanage(username,mode,trackname=None):
 
 
     if isdbrecord:
-        sql=f"insert into alltrackplaylist (year,month,player1,player2,trackno,trackname,picker) values ({int(str(datetime.now().year)[-2:])},{datetime.now().month},'{userindex['a'][0]}','{userindex['b'][0]}',{trackno},'{banpicklist[-1][0]}','{username}')"
+        banstring=["",""]
+
+        if trackno==0:
+            banstring=[",winner,winrecord,loserecord",",'X','X','X'"]
+
+        sql=f"insert into alltrackplaylist (round,setno,year,month,player1,player2,trackno,trackname,picker{banstring[0]}) values ({dbround},{dbset},{int(str(datetime.now().year)[-2:])},{datetime.now().month},'{userindex['a'][0]}','{userindex['b'][0]}',{trackno},'{banpicklist[-1][0]}','{username}'{banstring[1]})"
         print(sql)
         cur.execute(sql)
 
@@ -301,7 +308,7 @@ async def 가입(ctx,nickname=None):
 
 #밴픽 참가
 @bot.command()
-async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None):
+async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None,wround=None,wset=None):
     global part
     global maplist
     global gomsg
@@ -310,10 +317,21 @@ async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None):
     global bporder
     global isdbrecord
     global partid
+    global dbset
+    global dbround
 
 
 
     if str(dbrecord).lower()=="true":
+        if wround==None or wset==None:
+            await ctx.send("라운드와 세트를 입력해주세요")
+            return
+
+        dbset=int(wset)
+        dbround=int(wround)
+
+
+
         
 
         sql=f"select nickname from user where discordid={ctx.author.id}"
@@ -832,18 +850,18 @@ async def NoticeTurn(ctx):
     global turnmsg
 
     if turnmsg==None:
-        await turnmsg.edit(f"{userindex[bporder[order][0]][0]}의 {bporder[order][1]}을 할 차례")
+        await turnmsg.edit(f"{userindex[bporder[order][0]][0]}의 **{bporder[order][1]}**을 할 차례")
     else:
-        await turnmsg.edit(content=f"{userindex[bporder[order][0]][0]}의 {bporder[order][1]}을 할 차례")
+        await turnmsg.edit(content=f"{userindex[bporder[order][0]][0]}의 **{bporder[order][1]}**을 할 차례")
 
 
 def GetAllTrack():
     allmaplist=[]
-    datalist = os.listdir("maplist")
+    datalist = os.listdir("maplist/speed")
     senddata = ""
     for data in datalist:
         if data.endswith(".maptxt") and not "item" in data:
-            mapfile=open("maplist/"+data,"r",encoding="UTF-8")
+            mapfile=open("maplist/speed/"+data,"r",encoding="UTF-8")
             for track in mapfile.readlines():
                 temp=track.replace("\n","")
                 if not temp in allmaplist:
@@ -1090,11 +1108,6 @@ async def 선호도(ctx,nick=None):
             cw.writerow(data)
 
     await ctx.send(files=[nextcord.File(csvname)])
-
-
-    
-
-
 
 
 

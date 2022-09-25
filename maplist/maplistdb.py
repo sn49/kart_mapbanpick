@@ -20,10 +20,10 @@ password=sqlcon["password"],
 autocommit=True,
 )
 
-filename=""
+filename="y22m10_02.maptxt"
 cur = database.cursor()
 
-datalist = os.listdir("maplist")
+
 senddata = ""
 
 
@@ -34,7 +34,7 @@ if filename.endswith(".maptxt"):
     m=int(filename[4:6])
     no=int(filename[7:9])
     
-    mapfile=open(f"maplist/{filename}","r",encoding="UTF-8")
+    mapfile=open(f"maplist/speed/{filename}","r",encoding="UTF-8")
     maplist=mapfile.readlines()
 
 
@@ -42,5 +42,6 @@ if filename.endswith(".maptxt"):
     for track in maplist:
         name=track.replace('\n','')
         sql=f"insert ignore into speedtracklist values ({y},{m},{no},'{name}')"
+        print(sql)
         cur.execute(sql)
 
