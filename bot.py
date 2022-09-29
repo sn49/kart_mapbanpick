@@ -14,6 +14,7 @@ import copy
 import pymysql
 import json
 import csv
+import KartRider
 
 inputT=input("test or main : ")
 
@@ -59,6 +60,8 @@ async def on_ready():
     print("ready")
 
 timemsg=None
+
+api = KartRider.Api('api키')
 
 async def timer(ctx):
     global maplist
@@ -135,7 +138,7 @@ async def on_reaction_add(reaction,user):
                     if len(part)==1:
 
                         if isdbrecord:
-                            sql=f"select nickname from user where discordid={user.id}"
+                            sql=f"select accessid from user where discordid={user.id}"
                             cur.execute(sql)
                             res=cur.fetchone()
 
@@ -143,7 +146,8 @@ async def on_reaction_add(reaction,user):
                                 await reaction.message.channel.send("비회원입니다. true 미입력시 비회원으로 가능합니다.")
                                 return
                             else:
-                                part.append(res[0])
+                                user = api.user(accessid=res[0])
+                                part.append(user.name)
                                 partid.append(user.id)
                             
                         else:
@@ -280,7 +284,7 @@ def checkbpofile(filename):
 
 
 @bot.command()
-async def 가입(ctx,nickname=None):
+async def 가입(ctx,nickname=None, ridername=None):
     banword=open("secret/banword.txt","r",encoding="UTF-8").readlines()
     for i in range(len(banword)):
         banword[i]=banword[i].replace("\n","")
@@ -292,16 +296,20 @@ async def 가입(ctx,nickname=None):
     if len(nickname)>15:
         await ctx.send("닉네임 글자 수 15자 이하")
         return
-    
-    sql=f"insert ignore into user (discordid,nickname) values ({ctx.author.id},'{nickname}')"
-    print(sql)
-    result=cur.execute(sql)
-    print(result)
 
-    if result>0: 
-        await ctx.send("가입 완료")
-    else:
-        await ctx.send("이미 가입했거나 중복된 닉네임입니다.")
+    try:
+        user = api.user(ridername)
+        sql=f"insert ignore into user (discordid,nickname,accessid) values ({ctx.author.id},'{nickname}','{user.accessid}')"
+        print(sql)
+        result=cur.execute(sql)
+        print(result)
+
+        if result>0: 
+            await ctx.send("가입 완료")
+        else:
+            await ctx.send("이미 가입했거나 중복된 닉네임입니다.")
+    except:
+        await ctx.send("존재하지 않는 라이더명입니다.")
 
     
 
@@ -334,7 +342,7 @@ async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None,wround=None
 
         
 
-        sql=f"select nickname from user where discordid={ctx.author.id}"
+        sql=f"select accessid from user where discordid={ctx.author.id}"
         cur.execute(sql)
         res=cur.fetchone()
 
@@ -342,7 +350,8 @@ async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None,wround=None
             await ctx.send("비회원입니다. true 미입력시 비회원으로 가능합니다.")
             return
 
-        part.append(res[0])
+        user = api.user(accessid=res[0])
+        part.append(user.name)
         partid.append(ctx.author.id)
         isdbrecord=True
         
