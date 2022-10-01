@@ -14,10 +14,11 @@ import copy
 import pymysql
 import json
 import csv
+import ScoreCalcurate
 
 inputT=input("test or main : ")
 
-sqlinfo = open("mysql.json", "r")
+sqlinfo = open("secret/mysql.json", "r")
 sqlcon = json.load(sqlinfo)
 
 if inputT=="test":
@@ -51,7 +52,7 @@ bot=commands.Bot(command_prefix="맵")
 
 testmode=False
 
-tokenfile=open("token.txt","r")
+tokenfile=open("secret/token.txt","r")
 token = tokenfile.readlines()
 
 @bot.event
@@ -921,8 +922,8 @@ async def 평가(ctx,mapfilename=None):
 @bot.command()
 async def 랭킹(ctx,nickname=None):
     ranklist = []
-    with open("카트 1대1 elo rating.json", "r", encoding="UTF-8") as f:
-        alldata = json.load(f)
+    
+    alldata = ScoreCalcurate.GetRanking(cur)
         
     for user in alldata.keys():
 
