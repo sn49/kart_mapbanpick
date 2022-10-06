@@ -147,7 +147,8 @@ async def on_reaction_add(reaction, user):
                         await reaction.message.add_reaction("😀")
 
                         try:
-                            banpickctx.voice_client.disconnect()
+                            print("disconnect try")
+                            await banpickctx.voice_client.disconnect()
                         except:
                             pass
 
