@@ -74,7 +74,7 @@ async def timer(ctx):
     second=0
 
     if testmode:
-        second=38
+        second=90
     else:   
         second=40
 
@@ -360,9 +360,10 @@ async def 신청(ctx,mapfilename=None,bpofilename=None,dbrecord=None,wround=None
         return
     else:
         
-        if mapfilename=="all":
+        if mapfilename.startswith("all"):
+            mapcount=int(mapfilename.split("-")[1])
             maplist=GetAllTrack()
-            maplist=random.sample(maplist,14)
+            maplist=random.sample(maplist,mapcount)
         else:
             # 맵추첨
             mapfile=open(f"maplist/{mapfilename}.maptxt","r",encoding="UTF-8")
@@ -439,14 +440,20 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
             cur.execute(sql)
             result=cur.fetchall()
             sendtext="```"
+
+            index=0
+
             for i in result:
                 sendtext+=f"{'%-20s' % i[0]}\t{'%-9s' % i[1]}\t{'%-9s' % i[2]}\n"
+                index+=1
+                if index%20==0:
+                    sendtext+="```"
+                    await ctx.send(sendtext)
+                    sendtext="```"
             sendtext+="```"
             await ctx.send(sendtext)
             return
-        
-        mapname=mapname.replace(' ','_')
-
+    
         
         sendtext=""
 
@@ -454,24 +461,6 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
         if nickname==None:
             #카운트 해야할것 : 픽 횟수, 밴 횟수, 랜덤 픽 횟수, 랜덤 밴 횟수
             #찾아야 할것 : 최고기록
-
-            sql=f'''SELECT * FROM alltrackplaylist WHERE trackname="{mapname}"'''
-
-            cur.execute(sql)
-
-            result=cur.fetchall()
-
-            
-            bestrecord={
-                "year":0,
-                "month":0,
-                "round":0,
-                "setno":0,
-                "trackno":0,
-                "player":"",
-                "opponent":"",
-                "record":"9'59'999"
-            }
 
             randomban=0
             ban=0
@@ -481,50 +470,75 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
             cant=0
             random_cant=0
 
+            #랜덤 밴 횟수
+            sql=f"""SELECT COUNT(*) FROM alltrackplaylist WHERE trackname="{mapname}" and picker="random" AND trackno=0"""
 
-            for i in result:
-                year=i[1]
-                month=i[2]
-                round=i[3]
-                player=(i[4],i[5])
-                setno=i[6]
-                trackno=i[7]
-                picker=i[9]
-                winner=i[10]
-                winrecord=i[11]
+            cur.execute(sql)
+            
 
-                if trackno==0:
-                    if picker=="random":
-                        randomban+=1
-                    else:
-                        ban+=1
+            randomban=cur.fetchone()[0]
+
+            #랜덤 픽 횟수
+            sql=sql.replace("no=","no!=")
+
+            print(sql)
+            cur.execute(sql)
+
+            randompick=cur.fetchone()[0]
+
+            #픽 횟수
+            sql=sql.replace("ker=","ker!=")
+            cur.execute(sql)
+
+            pick=cur.fetchone()[0]
+
+
+            #밴 횟수
+            sql=sql.replace("no!=","no=")
+            cur.execute(sql)
+
+            ban=cur.fetchone()[0]
+
+
+            #최고기록
+
+            bestrecord={
+                "year":"",
+                "month":"",
+                "round":"",
+                "setno":"",
+                "trackno":"",
+                "player":"",
+                "opponent":"",
+                "record":"9'59'999"
+            }
+
+
+
+            sql=f'''SELECT * FROM alltrackplaylist WHERE trackname="{mapname}" and winner!="X" AND trackno!=0 order by winrecord asc LIMIT 1'''
+
+            cur.execute(sql)
+
+            res=cur.fetchone()
+
+            if res!=None:
+                bestrecord={
+                    "year":res[1],
+                    "month":res[2],
+                    "round":res[3],
+                    "setno":res[6],
+                    "trackno":res[7],
+                    "player":res[10],
+                    "opponent":"",
+                    "record":res[11]
+                }
+              
+                if bestrecord["player"]==res[4]:
+                    bestrecord["opponent"]=res[5]
                 else:
-                    if picker=="random":
-                        randompick+=1
-                    else:
-                        pick+=1
+                    bestrecord["opponent"]=res[4]
 
-                    if winner!="X":
-                        if bestrecord["record"]>winrecord:
-                            bestrecord["year"]=year
-                            bestrecord["month"]=month
-                            bestrecord["round"]=round
-                            bestrecord["setno"]=setno
-                            bestrecord["trackno"]=trackno
-                            bestrecord["player"]=winner
-
-                            if winner==player[0]:
-                                bestrecord["opponent"]=player[1]
-                            else:
-                                bestrecord["opponent"]=player[0]
-
-                            bestrecord["record"]=winrecord
-                    else:
-                        if picker=="random":
-                            random_cant+=1
-                        else:
-                            cant+=1
-
+                bestrecord["record"]:res[11]
             
             sendtext=f"{mapname.replace('_',' ')}\n픽 {pick}회({cant}회 못함)\n밴 {ban}회\n랜덤밴 {randomban}회\n랜덤픽 {randompick}회({random_cant}회 못함)"
 
@@ -610,42 +624,159 @@ async def 기록(ctx,mapname=None,nickname=None,nickname2=None):
                 return
 
         await ctx.send(sendtext)
-    except pymysql.ProgrammingError:
+    except Exception as e:
+        print(e)
         await ctx.send("기록이 없는 트랙입니다.")
 
 
 
 @bot.command()
-async def 전적(ctx,nickname=None,nickname2=None):
-    try:
-        if nickname==None:
-            await ctx.send("nickname을 입력해주세요.")
-            return
+async def 전적(ctx,nick1=None,nick2=None):
+    if nick1==None:
+        await ctx.send("nickname을 입력해주세요.")
+        return
 
-        sendtext=""
+    sendtext=""
+
+    player1={"track":0,"set":0,"game":0}
+    player2={"track":0,"set":0,"game":0}
+    tempscore={"track":{"player1":0,"player2":0},"set":{"player1":0,"player2":0}}
+
+    tempset=-1
+    
+
+    if nick2==None:
+        trackwinsql=f"""select COUNT(winner) from alltrackplaylist WHERE winner='{nick1}' AND (player1='{nick1}' OR player2='{nick1}')"""
+        cur.execute(trackwinsql)
+
+        res=cur.fetchone()
+
         
+        player1["track"]=res[0]
 
-        if nickname2==None:
-            sql=f"SELECT SUM(gamewin),SUM(gamelose), SUM(setwin),SUM(setlose),SUM(trackwin),SUM(tracklose) FROM user_{nickname}"
-            print(sql)
-            cur.execute(sql)
-            i=cur.fetchone()
-            sendtext=f"{nickname}\n{i[0]}승 {i[1]}패\n세트 {i[2]}승 {i[3]}패\n트랙 {i[4]}승 {i[5]}패"
-        else:
-            sql=f"select * from user_{nickname} where nickname='{nickname2}'"
-            cur.execute(sql)
-            i=cur.fetchone()
-            if i==None:
-                sendtext="상대를 찾지 못했습니다."
+
+        tracklosesql=f"""select COUNT(winner) from alltrackplaylist WHERE winner!='{nick1}' AND winner!='X' AND (player1='{nick1}' OR player2='{nick1}')"""
+        cur.execute(tracklosesql)
+
+        res=cur.fetchone()
+        
+        player2["track"]=res[0]
+
+        setsql=f"""SELECT winner,COUNT(winner) FROM (SELECT YEAR, MONTH, ROUND, setno,winner,COUNT(winner) AS trackscore from alltrackplaylist WHERE (player1='{nick1}' or player2='{nick1}') and winner != 'X' GROUP BY YEAR, MONTH, ROUND, setno,winner,player1,player2) res WHERE trackscore>=4 GROUP BY winner"""
+
+        cur.execute(setsql)
+        
+        res=cur.fetchall()
+
+        for i in res:
+            if i[0]==nick1:
+                player1["set"]=i[1]
             else:
-                sendtext=f"{nickname} vs {i[0]}\n{i[1]} : {i[2]}\n세트 {i[3]} : {i[4]}\n트랙 {i[5]} : {i[6]}"
-        await ctx.send(sendtext)
-    except pymysql.ProgrammingError:
-        await ctx.send("존재하지 않는 유저입니다.")
+                player2["set"]+=i[1]
+
+        
+        gamewinsql=f"""SELECT COUNT(*) FROM(SELECT YEAR, MONTH, ROUND, player1, player2, COUNT(*) as setscore FROM(SELECT YEAR, MONTH, ROUND, setno, player1, player2, COUNT(winner) AS trackscore FROM alltrackplaylist WHERE('{nick1}' IN (player1, player2))AND winner='{nick1}' GROUP BY YEAR, MONTH, ROUND, setno, player1, player2)res WHERE trackscore>=4 GROUP BY YEAR, MONTH, ROUND, LEAST(player1, player2), GREATEST(player1, player2))res WHERE setscore>=2"""
+
+        cur.execute(gamewinsql)
+
+        res=cur.fetchone()
+        
+        player1["game"]=res[0]
 
 
+        gamelosesql=gamewinsql.replace(f"winner='{nick1}'",f"winner not in ('{nick1}','X')")
+
+        print(gamelosesql)
+
+        cur.execute(gamelosesql)
+
+        res=cur.fetchone()
+        
+        player2["game"]=res[0]
+
+        sendtext=f"{nick1}\n{player1['game']}승 {player2['game']}패\n세트 {player1['set']}승 {player2['set']}패\n트랙 {player1['track']}승 {player2['track']}패"
+    else:
+        tracksql=f"""select winner,COUNT(winner) from alltrackplaylist WHERE ('{nick1}' IN (player1, player2) AND '{nick2}' IN (player1, player2)) AND winner!='X' GROUP BY winner"""
+
+        cur.execute(tracksql)
+
+        res=cur.fetchall()
+
+        for i in res:
+            if i[0]==nick1:
+                player1["track"]=i[1]
+            else:
+                player2["track"]=i[1]
 
 
+        setsql=f"""SELECT winner,COUNT(winner) FROM (SELECT YEAR, MONTH, ROUND, setno,winner,COUNT(winner) AS trackscore from alltrackplaylist WHERE ('{nick1}' IN (player1, player2) AND '{nick2}' IN (player1, player2)) and winner != 'X' GROUP BY YEAR, MONTH, ROUND, setno,winner) res WHERE trackscore>=4 GROUP BY winner"""
+
+        cur.execute(setsql)
+
+        res=cur.fetchall()
+
+        for i in res:
+            if i[0]==nick1:
+                player1["set"]=i[1]
+            else:
+                player2["set"]=i[1]
+
+        gamesql=f"""SELECT COUNT(*) FROM (SELECT * FROM (SELECT YEAR, MONTH, ROUND, setno,winner,COUNT(winner) AS trackscore from alltrackplaylist WHERE ('{nick1}' IN (player1, player2) AND '{nick2}' IN (player1, player2)) and winner != 'X' GROUP BY YEAR, MONTH, ROUND, setno,winner) res WHERE trackscore>=4 AND winner="...winner..." GROUP BY year,month,ROUND HAVING COUNT(*)>=2) res"""
+
+        cur.execute(gamesql.replace("...winner...",nick1))
+
+        res=cur.fetchone()
+
+        
+        player1["game"]=res[0]
+
+
+        cur.execute(gamesql.replace("...winner...",nick2))
+
+        res=cur.fetchone()
+
+        
+        player2["game"]=res[0]
+
+        # 나중에 기록 차이 구하기
+
+        # recordsql=f"select winner,winrecord, loserecord from alltrackplaylist where ('{nick1}' IN (player1, player2) AND '{nick2}' IN (player1, player2))"
+
+        # res=cur.fetchall()
+
+        # for i in res:
+        #     winrecord=
+        #     if i[0]==nick1:
+        #         player1["set"]=i[1]
+        #     else:
+        #         player2["set"]=i[1]
+
+
+        sendtext=f"{nick1} vs {nick2}\n{player1['game']} : {player2['game']}\n세트 {player1['set']} : {player2['set']}\n트랙 {player1['track']} : {player2['track']}\n평균 기록 차이 : 업데이트 예정"
+    await ctx.send(sendtext)
+
+
+@bot.command()
+async def bpocheck(ctx,bpofilename=None):
+    print(bpofilename)
+    banpickorder=checkbpofile(bpofilename)
+    
+    playera={"ban":0,"pick":0}
+    playerb={"ban":0,"pick":0}
+
+    for turn in banpickorder:
+        if turn[0]=="a":
+            if turn[1]=="pick":
+                playera["pick"]+=1
+            else:
+                playera["ban"]+=1
+        elif turn[0]=="b":
+            if turn[1]=="pick":
+                playerb["pick"]+=1
+            else:
+                playerb["ban"]+=1
+
+    await ctx.send(f'''playera pick-{playera["pick"]}회 ban{playera["ban"]}회\nplayerb pick-{playerb["pick"]}회 ban{playerb["ban"]}회''')
 
 @bot.command()
 async def 랜덤맵(ctx):
@@ -675,6 +806,11 @@ async def ChangeTurn(ctx):
 
     global bporder
 
+    global dbround
+    global dbset
+
+    global isdbrecord
+
     order+=1
     sendlist=["change"]
 
@@ -691,8 +827,7 @@ async def ChangeTurn(ctx):
 
 
 
-
-        sendtext=f"```픽 리스트\n"
+        sendtext=f"```round{dbround} {dbset}set\n\n픽 리스트\n"
     
         trackno=0
 
@@ -736,6 +871,9 @@ async def EndBanPick():
     global sendmsg
     global timemsg
 
+    global dbround
+    global dbset
+
     part.clear()
     partid.clear()
     maplist.clear()
@@ -745,9 +883,14 @@ async def EndBanPick():
     sendmsg=None
     timemsg=None
 
+    dbround=0
+    dbset=0
+
     await gomsg.delete()
     await newch.delete()
     await banpickRole.delete()
+
+    
     
     
     
@@ -872,7 +1015,7 @@ def GetAllTrack():
 @bot.command()
 async def 리스트(ctx,mapfilename=None):
     if mapfilename==None:
-        datalist = os.listdir("maplist")
+        datalist = os.listdir("maplist/speed")
         senddata = ""
         for data in datalist:
             if data.endswith(".maptxt"):
@@ -1023,9 +1166,8 @@ async def 선호도(ctx,nick=None):
         
         
 
-        if nickname==None:
-            if d[4]=="random":
-                continue
+        if nickname=="random":
+            continue
         
 
         if not nickname in pickbancount:
