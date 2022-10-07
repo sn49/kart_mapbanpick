@@ -146,18 +146,14 @@ async def on_reaction_add(reaction, user):
                         await reaction.message.edit(content=f"{part}의 밴픽을 보고싶다면 😀를 눌러주세요.")
                         await reaction.message.add_reaction("😀")
 
-                        try:
-                            print("disconnect try")
-                            await banpickctx.voice_client.disconnect()
-                        except:
-                            pass
-
                         channel = banpickctx.author.voice.channel
                         await channel.connect()
 
+                        music = 'speed' if round(random.random()) == 0 else 'item'
+
                         banpickctx.voice_client.stop()
                         source = nextcord.PCMVolumeTransformer(
-                            nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source='music/banpick.mp3'))
+                            nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source=f'music/banpick_{music}.mp3'))
                         banpickctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
 
                         await banpickStart(reaction.message.channel)
@@ -809,7 +805,7 @@ async def ChangeTurn(ctx):
         await signch.send(f"{sendtext}")
 
         banpickctx.voice_client.stop()
-        source = nextcord.PCMVolumeTransformer(nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source='music/gamestart.mp3'))
+        source = nextcord.PCMVolumeTransformer(nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source='music/game_start.mp3'))
         banpickctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
 
         await EndBanPick()
@@ -820,7 +816,7 @@ async def ChangeTurn(ctx):
     await timer(ctx)
 
 
-async def EndBanPick():
+async def EndBanPick(is_banpick_completed=True):
     global part
     global partid
     global banpicklist
@@ -838,6 +834,16 @@ async def EndBanPick():
     global dbround
     global dbset
 
+    await gomsg.delete()
+    await newch.delete()
+    await banpickRole.delete()
+
+    if is_banpick_completed:
+        await asyncio.sleep(14)
+
+    banpickctx.voice_client.stop()
+    await banpickctx.voice_client.disconnect()
+
     part.clear()
     partid.clear()
     maplist.clear()
@@ -850,15 +856,10 @@ async def EndBanPick():
     dbround = 0
     dbset = 0
 
-    await gomsg.delete()
-    await newch.delete()
-    await banpickRole.delete()
-
 
 @bot.command()
 async def 취소(ctx):
-    banpickctx.voice_client.stop()
-    await EndBanPick()
+    await EndBanPick(is_banpick_completed=False)
 
 
 # 맵 밴
