@@ -105,6 +105,7 @@ gomsg = None
 ordermsg = None
 userindex = None
 banpickctx = None
+istheremusic = False
 
 
 @bot.event
@@ -119,6 +120,7 @@ async def on_reaction_add(reaction, user):
     global userindex
     global isdbrecord
     global partid
+    global istheremusic
 
     if reaction.message == gomsg:
         if not user.bot:
@@ -146,15 +148,22 @@ async def on_reaction_add(reaction, user):
                         await reaction.message.edit(content=f"{part}의 밴픽을 보고싶다면 😀를 눌러주세요.")
                         await reaction.message.add_reaction("😀")
 
-                        channel = banpickctx.author.voice.channel
-                        await channel.connect()
+                        try:
+                            channel = banpickctx.author.voice.channel
+                            await channel.connect()
 
-                        music = 'speed' if round(random.random()) == 0 else 'item'
+                            music = 'speed' if round(random.random()) == 0 else 'item'
 
-                        banpickctx.voice_client.stop()
-                        source = nextcord.PCMVolumeTransformer(
-                            nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source=f'music/banpick_{music}.mp3'))
-                        banpickctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+                            banpickctx.voice_client.stop()
+                            source = nextcord.PCMVolumeTransformer(
+                                nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe',
+                                                        source=f'music/banpick_{music}.mp3'))
+                            banpickctx.voice_client.play(source,
+                                                         after=lambda e: print(f'Player error: {e}') if e else None)
+                            istheremusic = True
+                        except:
+                            await reaction.message.channel.send("음성 채팅에 접속해있지 않아 음악을 재생하지 않습니다.")
+                            istheremusic = False
 
                         await banpickStart(reaction.message.channel)
                     else:
@@ -804,9 +813,10 @@ async def ChangeTurn(ctx):
         sendtext += "```"
         await signch.send(f"{sendtext}")
 
-        banpickctx.voice_client.stop()
-        source = nextcord.PCMVolumeTransformer(nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source='music/game_start.mp3'))
-        banpickctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+        if istheremusic:
+            banpickctx.voice_client.stop()
+            source = nextcord.PCMVolumeTransformer(nextcord.FFmpegPCMAudio(executable='music/ffmpeg.exe', source='music/game_start.mp3'))
+            banpickctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
 
         await EndBanPick()
         return
@@ -841,8 +851,9 @@ async def EndBanPick(is_banpick_completed=True):
     if is_banpick_completed:
         await asyncio.sleep(14)
 
-    banpickctx.voice_client.stop()
-    await banpickctx.voice_client.disconnect()
+    if istheremusic:
+        banpickctx.voice_client.stop()
+        await banpickctx.voice_client.disconnect()
 
     part.clear()
     partid.clear()
