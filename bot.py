@@ -1053,6 +1053,37 @@ async def 랭킹(ctx, nickname=None):
 
 
 @bot.command()
+async def 통계(ctx):
+    sql=f"SELECT COUNT(res2.row_num) from (SELECT ROW_NUMBER() OVER (ORDER BY id) row_num,id FROM (SELECT * from alltrackplaylist WHERE winner!='X') res1) res2;"
+
+    cur.execute(sql)
+
+    sendtext=f"총 게임수 : {cur.fetchone()[0]}회\n"
+
+
+    sql=sql.replace("winner!='X'","loserecord='retire'")
+
+    cur.execute(sql)
+
+    sendtext+=f"총 리타이어 수 : {cur.fetchone()[0]}회\n"
+
+    sql="SELECT trackname,COUNT(trackname) from alltrackplaylist WHERE winner!='X' GROUP BY trackname ORDER BY COUNT(trackname) DESC LIMIT 1"
+
+    cur.execute(sql)
+
+    res=cur.fetchone()
+    sendtext+=f"가장 많이 플레이한 트랙 : {res[0]} ({res[1]}회)\n"
+
+    sql=f"SELECT COUNT(*) FROM (SELECT trackname,COUNT(trackname) AS playcount from alltrackplaylist WHERE winner!='X' GROUP BY trackname ORDER BY COUNT(trackname)) res WHERE res.playcount=1"
+
+    cur.execute(sql)
+
+    sendtext+=f"1회 플레이한 트랙들의 개수 : {cur.fetchone()[0]}개"
+
+
+    await ctx.send(sendtext)
+
+@bot.command()
 async def 선호도(ctx, nick=None):
     checkno = 1
     sql = '''SELECT trackname FROM speedtracklist GROUP BY trackname'''
