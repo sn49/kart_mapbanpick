@@ -6,7 +6,7 @@ import json
 
 
 
-sqlinfo = open("mysql.json", "r")
+sqlinfo = open("secret/mysql.json", "r")
 sqlcon = json.load(sqlinfo)
 
 
@@ -20,7 +20,7 @@ password=sqlcon["password"],
 autocommit=True,
 )
 
-filename="y22m10_02.maptxt"
+filename="y22m11_02.maptxt"
 cur = database.cursor()
 
 

@@ -4,7 +4,7 @@ import os
 import time
 import elo
 
-def GetRanking(cur):
+def GetRanking(cur,bot):
     userinfo={}
 
     sql="select * from alltrackplaylist"
@@ -13,12 +13,14 @@ def GetRanking(cur):
     result=cur.fetchall()
 
     for i in result:
-        player=(i[4],i[5])
+        player=(str(i[4]),str(i[5]))
+        print(player)
+
         trackno=i[7]
-        winner=i[10]
+        winner=str(i[10])
         loser=""
 
-        if winner=="X":
+        if winner=="1":
             continue
 
         for p in player:
@@ -44,6 +46,8 @@ def GetRanking(cur):
         bonus=0
         
         if winner==player[0]:
+            
+             
             score=elo.rate_1vs1(userinfo[player[0]]["score"],userinfo[player[1]]["score"])
 
             for st in range(1,userinfo[winner]["winstrike"]+1):
@@ -53,10 +57,19 @@ def GetRanking(cur):
 
             getScore=(score[0]-userinfo[player[0]]["score"])*(1+bonus)
 
-            loser=player[1]
+            loser=str(player[1])
         else:
             score=elo.rate_1vs1(userinfo[player[1]]["score"],userinfo[player[0]]["score"])
-            loser=player[0]
+
+            # for st in range(1,userinfo[winner]["winstrike"]+1):
+            #     bonus+=st-1
+            
+            # bonus=bonus/100
+
+            # getScore=(score[1]-userinfo[player[1]]["score"])*(1+bonus)
+
+
+            loser=str(player[0])
 
         
         userinfo[winner]["score"]+=getScore
@@ -70,4 +83,5 @@ def GetRanking(cur):
     with open("카트 1대1 elo rating.json", "w", encoding="UTF-8") as jsonfile:
         json.dump(userinfo, jsonfile, indent=4)
 
+    print(userinfo)
     return userinfo
